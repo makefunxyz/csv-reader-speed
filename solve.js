@@ -136,32 +136,10 @@ export function run(input) {
 
     recordLine = line;
     recordRow = header && columns === null ? null : rows.length;
-    let fields;
+    const fields = [];
+    let ended;
     let lastQuoted = false;
-    // Fast path: a record with no quote at all. Its line runs to the next LF
-    // (or the end of the text); one native split cuts all its fields. A line
-    // holding a stray CR falls through to the field reader below. The quote
-    // check is a single indexOf to the next quote: quotes are dense in these
-    // files, so the scan stays inside the record.
-    const nlPos = text.indexOf('\n', pos);
-    const endPos = nlPos === -1 ? n : nlPos;
-    const qPos = text.indexOf('"', pos);
-    if (qPos === -1 || qPos >= endPos) {
-      let lineText = text.slice(pos, endPos);
-      if (nlPos !== -1 && lineText.charCodeAt(lineText.length - 1) === 13) lineText = lineText.slice(0, -1);
-      if (lineText.indexOf('\r') === -1) {
-        fields = lineText.split(',');
-        if (nlPos === -1) pos = n;
-        else {
-          pos = nlPos + 1;
-          line += 1;
-        }
-      }
-    }
-    if (fields === undefined) {
-      fields = [];
-      let ended;
-      do {
+    do {
         if (text.charCodeAt(pos) === 34) {
         // A field that opens with a quote.
         lastQuoted = true;
@@ -240,7 +218,6 @@ export function run(input) {
         ended = uEnded;
       }
     } while (ended === COMMA);
-    }
 
     // A line that held only stray CRs is left with no characters: no record
     // (its stray_cr errors stay).
