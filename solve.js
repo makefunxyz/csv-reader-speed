@@ -212,10 +212,63 @@ export function run(input) {
         }
         fields.push(value);
       } else {
+        // Plain unquoted field, inlined: the hot path (most fields). Same
+        // reading as readUnquoted('') below, without the call.
         lastQuoted = false;
-        readUnquoted('');
-        fields.push(uValue);
-        ended = uEnded;
+        const comma = text.indexOf(',', pos);
+        const nl = text.indexOf('\n', pos);
+        let d;
+        let fEnded;
+        if (comma === -1 && nl === -1) {
+          d = n;
+          fEnded = END;
+        } else if (comma === -1) {
+          d = nl;
+          fEnded = LINE_BREAK;
+        } else if (nl === -1) {
+          d = comma;
+          fEnded = COMMA;
+        } else if (comma < nl) {
+          d = comma;
+          fEnded = COMMA;
+        } else {
+          d = nl;
+          fEnded = LINE_BREAK;
+        }
+        let fValue = text.slice(pos, d);
+        const cr = fValue.indexOf('\r');
+        if (cr !== -1) {
+          if (fEnded === LINE_BREAK && cr === fValue.length - 1) {
+            fValue = fValue.slice(0, -1);
+          } else {
+            let out = '';
+            let start = 0;
+            let strays = 0;
+            for (let i = 0; i < fValue.length; i++) {
+              if (fValue.charCodeAt(i) === 13) {
+                if (fEnded === LINE_BREAK && i === fValue.length - 1) {
+                  // the CRLF at the end: strip, no error
+                } else {
+                  strays++;
+                }
+                out += fValue.slice(start, i);
+                start = i + 1;
+              }
+            }
+            out += fValue.slice(start);
+            fValue = out;
+            for (let k = 0; k < strays; k++) errors.push({ code: 'stray_cr', line: recordLine, row: recordRow });
+          }
+        }
+        if (fEnded === COMMA) pos = d + 1;
+        else if (fEnded === LINE_BREAK) {
+          pos = d + 1;
+          line += 1;
+        } else {
+          pos = n;
+        }
+        fields.push(fValue);
+        ended = fEnded;
       }
     } while (ended === COMMA);
 
